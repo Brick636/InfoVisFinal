@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type = "text/javascript" src = "https://d3js.org/d3.v7.min.js"></script>
+<script type = "text/javascript" src = "https://d3js.org/topojson.v3.min.js"></script>
+</head>
+
+<body>
+<svg width="1000" height="1000"></svg> <p>
+
+<script>
+	
+    Promise.all([
+	d3.json('datafiles/us_states_data.json'), //file[0]
+    d3.csv('datafiles/Migration_Flows_from_2010_to_2019.csv'), //file[1]
+    d3.csv('datafiles/state_crime.csv'), //file[2]
+    d3.csv('datafiles/average_monthly_temperature_by_state_1950-2022.csv'), //file[3]
+    d3.csv('datafiles/State_Taxes.csv'), //file[4]
+    d3.csv('datafiles/Unemployment in America Per US State.csv') //file[5]
+    ]). then(function(file) 
+    {
+		//Arrays for our data
+        var migrationInfo = [];
+        var crimeInfo = [];
+        var weatherInfo = [];
+        var taxInfo = [];
+        var employmentInfo = [];
+        //Normalized arrays for our data
+        var normMigrationInfo = [];
+        var normCrimeInfo = [];
+        var normWeatherInfo = [];
+        var normTaxInfo = [];
+        var normEmploymentInfo = [];
+
+        
+
+        // Migration array population
+        for(let i = 0; i < file[1].length; i++){
+            var dict = {
+                state: String(file[1][i].current_state),  // Current state
+                year: parseInt(file[1][i].year),                   // Current year
+                population: parseInt(file[1][i].population),       // Current state and year population
+                fromDiffState: parseInt(file[1][i].from_different_state_Total), // Number of people migrating to state from a different state
+                fromAbroad: parseInt(file[1][i].abroad_Total),                  // Number of people migrating to state from abroad
+                from: String(file[1][i].from),                                // State where people migrated
+                numPeopleFrom: parseInt(file[1][i].number_of_people)        // Number of people from said state above
+            };
+            migrationInfo.push(dict);
+            normMigrationInfo.push(JSON.parse(JSON.stringify(dict)));
+        };
+
+        // Crime array population
+        for(let i = 0; i < file[2].length; i++){
+            if(parseInt(file[2][i].Year) >= 2010){ // Ignores anything before 2010
+                var dict = {
+                    state: String(file[2][i].State), // State for crime rates
+                    year: parseInt(file[2][i].Year),  // Year for crime rates
+                    propCrimRate: parseFloat(file[2][i].Data_Rates_Property_All),  // Property crime rates per 100,000
+                    vioCrimRate: parseFloat(file[2][i].Data_Rates_Violent_All)  // Violent crime rates per 100,000
+                };
+                crimeInfo.push(dict);
+                normCrimeInfo.push(JSON.parse(JSON.stringify(dict)));
+            };
+        };
+
+        // Weather array population
+        for(let i = 0; i < file[3].length; i++){
+            if(parseInt(file[3][i].year) >= 2010 && parseInt(file[3][i].year) <= 2019){
+                var dict = {
+                    state: String(file[3][i].state), // State for year and month temp   
+                    month: parseInt(file[3][i].month), // Month of the year ex.01 = january
+                    year: parseInt(file[3][i].year),  // Year for average
+                    avgTemp: parseFloat(file[3][i].average_temp)  // Average temperature for the month of the year
+                };
+                weatherInfo.push(dict);
+                normWeatherInfo.push(JSON.parse(JSON.stringify(dict)));
+            };
+        };
+
+        // Taxes array population
+        for(let i =0; i < file[4].length; i++){
+            if( parseInt(file[4][i].year) <= 2019){
+                var dict = {
+                    state: String(file[4][i].State),    // State for the tax rates by year
+                    year: parseInt(file[4][i].year),    // Year fo tax rates
+                    incomeTax: parseFloat(file[4][i].Pers_Rate_Adj),  // Highest personal income tax rate by state
+                    salesTax: parseFloat(file[4][i].Sales_Rate_Adj) // Highest Sales tax rate by state
+                };
+                taxInfo.push(dict);
+                normTaxInfo.push(JSON.parse(JSON.stringify(dict)));
+            };
+        };
+
+        // Employment array population
+        for(let i =0; i < file[5].length; i++){
+            if(parseInt(file[5][i].Year) >= 2010 && parseInt(file[5][i].Year) <= 2019){
+                var dict = {
+                    state: String(file[5][i].State_Area),  // State for employment rates
+                    year: parseInt(file[5][i].Year),  // Year for employment rates
+                    month: parseInt(file[5][i].Month),  // Month of the year for employment rates
+                    employed: parseInt(file[5][i].Total_Employment.replace(/,/g, '')),  // Total employed in state
+                    umemployed: parseInt((file[5][i].Total_Unemployment).replace(/,/g, '')),  // Total unemployed in state
+                    percentEmp: parseFloat(file[5][i].Percent_Employed),  // Percent of total employed in state
+                    percentUnemp: parseFloat(file[5][i].Percent_Unemployed)  // Percent of total unemployed in state
+                };
+                employmentInfo.push(dict);
+                normEmploymentInfo.push(JSON.parse(JSON.stringify(dict)));
+            };
+        };
+
+        // Function to normalize arrays between 0 and 1
+        // Year and month are also normalized, use original arrays for year and month,
+        // Both arrays have the same keys and lengths
+        // Function also makes sure Strings are ignored in normalization
+        function normalize(arrToNorm, newArr){
+            var column = 0;
+            var max = [];
+            var min = [];
+            keyArray = Object.keys(arrToNorm[0]);
+            key = String(keyArray[column]);
+            while(column < keyArray.length){
+                for(let i = 0; i < arrToNorm.length; i++){
+                    if(typeof arrToNorm[i][key] == 'string'){
+                        column++;
+                        key = String(keyArray[column]);
+                        i=0;
+                    }else{
+                        max.push(arrToNorm[i][key]);
+                        min.push(arrToNorm[i][key]);
+                    }    
+                }
+                
+                var maxVal = Math.max(...max);
+                var minVal = Math.min(...min);
+
+                for(let i = 0; i < arrToNorm.length; i++){
+                        var normVal = (arrToNorm[i][key] - minVal)/(maxVal-minVal);
+                        newArr[i][key] = normVal;
+                    }
+                max = [];
+                min = [];
+                column++;
+                key = String(keyArray[column]);
+            }
+        }
+
+        //Function calls to create normalized arrays
+        normalize(migrationInfo, normMigrationInfo);
+        normalize(crimeInfo, normCrimeInfo);
+        normalize(weatherInfo, normWeatherInfo);
+        normalize(taxInfo, normTaxInfo);
+        normalize(employmentInfo, normEmploymentInfo);
+        // console.log(migrationInfo);
+        // console.log(normMigrationInfo);
+        // console.log(crimeInfo);
+        // console.log(normCrimeInfo);
+        // console.log(weatherInfo);
+        // console.log(normWeatherInfo);
+        // console.log(taxInfo);
+        // console.log(normTaxInfo);
+        // console.log(employmentInfo);
+        // console.log(normEmploymentInfo);
+
+
+        // set up the projection and its mapping to the display
+		let projection = d3.geoEquirectangular();
+			projection.fitSize([800,800], file[0]);
+
+		// create a SVG path generator
+		let generator = d3.geoPath()
+			.projection(projection);
+
+		// create svg symbol, set offset for the plot
+		let svg = d3.select("svg")
+			.attr('transform', 'translate(50, 50)')
+
+		let	width = svg.attr("width"),
+			height = svg.attr("height");
+
+		// put it in a group
+		let plot = svg.append("g")
+	   	.attr('transform', 'translate(0,0)')
+	
+		// Add the paths to the plot. The features key can hold multiple path data
+		// which is iterated through in the following code
+		// The generator reads the needed geometry for the whole state, which
+		// is a set of polygons - see the data file and its structure.
+		plot.selectAll('paths')
+			.data(file[0].features)
+			.enter()
+			.append('path')
+			.attr('d', generator)
+			.attr('stroke', 'red')
+			.attr('fill', 'green')
+			.attr('opacity', 0.9)
+			.attr('stroke-width', 2)
+
+            // let v  = projection([-80.83, 35.229]);    
+            // plot.append('circle')
+            // 	.attr('fill', '#ff00ff')
+            // 	.attr('r', 5)
+            // 	.attr('cx', v[0])
+            // 	.attr('cy', v[1])
+        })
+</script>
+</body>
+</html>
