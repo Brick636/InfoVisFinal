@@ -16,7 +16,8 @@
     d3.csv('datafiles/state_crime.csv'), //file[2]
     d3.csv('datafiles/average_monthly_temperature_by_state_1950-2022.csv'), //file[3]
     d3.csv('datafiles/State_Taxes.csv'), //file[4]
-    d3.csv('datafiles/Unemployment in America Per US State.csv') //file[5]
+    d3.csv('datafiles/Unemployment in America Per US State.csv'), //file[5]
+    d3.csv('datafiles/fbc_data_2022_county.csv') //file[6]
     ]). then(function(file) 
     {
 		//Arrays for our data
@@ -25,12 +26,14 @@
         var weatherInfo = [];
         var taxInfo = [];
         var employmentInfo = [];
+        var costOfLiving = [];
         //Normalized arrays for our data
         var normMigrationInfo = [];
         var normCrimeInfo = [];
         var normWeatherInfo = [];
         var normTaxInfo = [];
         var normEmploymentInfo = [];
+        var normCostOfLiving = [];
 
         
 
@@ -108,6 +111,39 @@
             };
         };
 
+        // Function calculates the median values of each state
+        function medianCostOfLiving() {
+            totalArr = [];
+            for (let i = 0; i < file[6].length; i++) {
+                var state = String(file[6][i].State_abv);
+                var total = parseInt(file[6][i].A_Total.replace("$", "").replace(",", ""));
+
+                if (i > 0 && state === costOfLiving[costOfLiving.length-1].state) {
+                    totalArr.push(total);
+                }else{
+
+                    var sortedArr = totalArr.sort((a, b) => a - b);
+                    var midIndex = Math.floor(totalArr.length / 2);
+                    var median = sortedArr[midIndex];
+
+                    var dict = {
+                        state: state,
+                        total: median
+                    };
+
+                    costOfLiving.push(dict);
+                    totalArr = [];   
+                }
+            }
+            for(let i = 0; i < costOfLiving.length-1; i++){
+                costOfLiving[i].total = costOfLiving[i+1].total;
+            }
+            // Manually calculated and entered median total for 'WY'
+            costOfLiving[costOfLiving.length - 1].total = 82655;
+            normCostOfLiving = JSON.parse(JSON.stringify(costOfLiving));
+        }
+        medianCostOfLiving();
+
         // Function to normalize arrays between 0 and 1
         // Year and month are also normalized, use original arrays for year and month,
         // Both arrays have the same keys and lengths
@@ -150,6 +186,7 @@
         normalize(weatherInfo, normWeatherInfo);
         normalize(taxInfo, normTaxInfo);
         normalize(employmentInfo, normEmploymentInfo);
+        normalize(costOfLiving, normCostOfLiving);
         // console.log(migrationInfo);
         // console.log(normMigrationInfo);
         // console.log(crimeInfo);
@@ -160,7 +197,8 @@
         // console.log(normTaxInfo);
         // console.log(employmentInfo);
         // console.log(normEmploymentInfo);
-
+         console.log(costOfLiving);
+         console.log(normCostOfLiving);
 
         // set up the projection and its mapping to the display
 		let projection = d3.geoEquirectangular();
