@@ -127,8 +127,8 @@
                     var median = sortedArr[midIndex];
 
                     var dict = {
-                        state: state,
-                        total: median
+                        state: state,  // State abreviation
+                        total: median  // total median values
                     };
 
                     costOfLiving.push(dict);
@@ -197,8 +197,8 @@
         // console.log(normTaxInfo);
         // console.log(employmentInfo);
         // console.log(normEmploymentInfo);
-         console.log(costOfLiving);
-         console.log(normCostOfLiving);
+        //console.log(costOfLiving);
+        //console.log(normCostOfLiving);
 
         // set up the projection and its mapping to the display
 		let projection = d3.geoEquirectangular();
