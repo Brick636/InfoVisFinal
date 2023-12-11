@@ -582,6 +582,7 @@
                 // Function call to create crime line graphs
                 crimeLineGraph('California', 2010, 2019);
                 CoLLineGraph('Alabama', 2010, 2019);
+                employmentGraph('Alaska',  2014, 2018);
             }
 
             function initalDraw(geoData) {
@@ -757,7 +758,7 @@
                             .x((d) => mOsX(d.x))
                             .y((d) => mOsY(d.y));
 
-                        // Draws path based on migrationIn array to compare migration of outgoing population
+                        // Draws path based on migrationOut array to compare migration of outgoing population
                         plot.append('path')
                             .attr('transform', 'translate('+xLocation+', '+yLocation+')')
                             .attr('d', mOline(migrationOut))
@@ -1062,7 +1063,7 @@
                         .attr('y', yLocation + 360)
                         .style('font-size', '18px')
                         .style('fill', 'black')
-                        .text('Migration Data is Scaled off Crime Data')
+                        .text('Migration Data is Scaled off CoL Data')
 
                     }else{
                         // If there is only one year selected show data instead
@@ -1104,6 +1105,317 @@
                 }
                 // Calls the function
                 drawGraph(costOfLiving, 360, 1050);              
+            }
+
+            function employmentGraph(selectedState,  startYear, endYear){
+                let svg = d3.select('svg');
+                let plot = svg.append('g');
+                let plot2 = svg.append('g');
+
+                //Incase someone selects a start year greater than end year
+                if(startYear > endYear){
+                    endYear = startYear;
+                }
+
+                // Length of our data used in years and arrays for paths
+                var len = endYear - startYear;
+                const employedArr = [];
+                const unemployedArr = [];
+                const migrationIn = [];
+                const migrationOut = [];
+                
+                
+                // Loading path arrays from selected parameters in function
+                for(let i = 0; i <= len; i++){
+                    var year = startYear + i;
+
+                    // Load median average weather path data and migration data
+                    for(let i = 0; i < 12; i++){
+                        var employed = visData.get(selectedState).get(year).unemploymentInfo[i].employed;
+                        var unemployed = visData.get(selectedState).get(year).unemploymentInfo[i].unemployed;
+                        employedArr.push({
+                            x: ""+(i+1)+"/"+(year%100)+"",
+                            y: employed                       
+                        });
+                        unemployedArr.push({
+                            x: ""+(i+1)+"/"+(year%100)+"",
+                            y: unemployed                       
+                        });
+                    }
+
+                    migrationIn.push({
+                        x: year,
+                        y: (visData.get(selectedState).get(year).fromAbroadPop + visData.get(selectedState).get(year).fromDiffStatePop)
+                    });
+
+                    migrationOut.push({
+                        x: year,
+                        y: visData.get(selectedState).get(year).leftToStatesTotal
+                    });
+                }
+                console.log(employedArr);
+                console.log(unemployedArr);
+
+                // Draws the graph, xLocation is the start point of x-Axis, yLocation is the start of y-axis
+                function drawGraph(arr, xLocation, yLocation){
+                    if(arr.length >= 2*12){
+                        // Scalers based off array time series for x, max and min for y (sY) and scaleBand to get automatic widths
+                        var parseDate = d3.timeParse("%m/%y")
+                        let sX = d3.scaleTime()
+                            .domain([parseDate(arr[0].x), parseDate(arr[arr.length-1].x)])
+                            .range([0, 880]);
+
+                        let sY = d3.scaleLinear()
+                            .domain([d3.max(arr, (d) => d.y), d3.min(arr, (d) => d.y)])
+                            .range([0, 200]);
+
+                        // scale band can be found here https://d3js.org/d3-scale/band
+                        let scaleX = d3.scaleBand()
+                            .domain(arr.map(d => d.x))
+                            .range([0, 880])
+
+                        // Set up and plot x and y axis with scaler
+                        let xAxis = d3.axisBottom(sX).tickFormat(d3.timeFormat("%-m/%y"));
+                        let yAxis = d3.axisLeft(sY);
+
+                        plot.append('g')
+                            .attr('transform', 'translate('+(xLocation)+', '+(yLocation+205)+')')
+                            .call(xAxis);
+
+                        plot.append('g')
+                            .attr('transform', 'translate('+(xLocation)+', '+(yLocation)+')')
+                            .call(yAxis);
+
+                        // Need to select which SVG plot for the barchart plot
+                        if(arr == employedArr){
+                            var plotSelect = plot;
+                        }else{
+                            var plotSelect = plot2;
+                        }
+                        
+                        var width = 6
+                        // Draws bars based on array passed in at xLocation and yLocation for crime
+                        plotSelect.selectAll('rect') 
+                            .data(arr)			
+                            .enter()
+                            .append('rect')
+                            .attr('transform', 'translate('+(xLocation)+', '+yLocation+')')
+                            .attr('x', (d) => scaleX(d.x))
+                            .attr('y', (d) => sY(d.y)) 
+                            .attr('width', scaleX.bandwidth()-2) 
+                            .attr('height', (d) => 200 - sY(d.y)) 
+                            .attr('fill', 'red');
+                        
+                        // Scalers based off migrationIn max and mins for x (mIsX) and y (mIsY)
+                        let mIsX = d3.scaleLinear()
+                            .domain([d3.max(migrationIn, (d) => d.x), d3.min(migrationIn, (d) => d.x)])
+                            .range([880, 0]);
+
+                        let mIsY = d3.scaleLinear()
+                            .domain([d3.max(migrationIn, (d) => d.y), d3.min(migrationIn, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for migrationIn path
+                        var mIline = d3.line()
+                            .x((d) => mIsX(d.x))
+                            .y((d) => mIsY(d.y));
+
+                        // Draws path based on migrationIn array to compare migration of incoming population
+                        plotSelect.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', mIline(migrationIn))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'green')
+                            .attr('stroke-width', '1.5px')
+
+                        // Scalers based off migrationOut max and mins for x (mOsX) and y (mOsY)
+                        let mOsX = d3.scaleLinear()
+                            .domain([d3.max(migrationOut, (d) => d.x), d3.min(migrationOut, (d) => d.x)])
+                            .range([880, 0]);
+
+                        let mOsY = d3.scaleLinear()
+                            .domain([d3.max(migrationOut, (d) => d.y), d3.min(migrationOut, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for migrationOut path
+                        var mOline = d3.line()
+                            .x((d) => mOsX(d.x))
+                            .y((d) => mOsY(d.y));
+
+                        // Draws path based on migrationOut array to compare migration of outgoing population
+                        plotSelect.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', mOline(migrationOut))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'blue')
+                            .attr('stroke-width', '1.5px')                   
+                        
+
+                        // y-axis text
+                        plot.append('text')
+                            .attr('x', xLocation - 35)
+                            .attr('y', yLocation + 130)
+                            .attr('transform', 'rotate(-90, '+(xLocation-50)+', '+(yLocation+130)+')')
+                            .style('font-size', '20px')
+                            .text('Totals')
+
+                        // x-axis text
+                        plot.append('text')
+                            .attr('x', xLocation + 400)
+                            .attr('y', yLocation + 250)
+                            .style('font-size', '20px')
+                            .text('Month/Year')
+
+                        var title = '';
+                        if(arr == unemployedArr){
+                            // Title of unenployment graph text
+                            title = 'Unemployment Totals';
+                            plot.append('text')
+                            .attr('x', xLocation + 400)
+                            .attr('y', yLocation - 15)
+                            .style('font-size', '20px')
+                            .text('Unemployment By Month')
+
+                            // Legend Text
+                            plot.append('rect')
+                            .attr('x', xLocation)
+                            .attr('y', yLocation + 275)
+                            .attr('width', 350)
+                            .attr('height', 95)
+                            .attr('fill', 'rgb(230, 230, 230)')
+                            .attr('stroke', 'red');
+                            
+                            plot.append('text')
+                            .attr('x', xLocation + 50)
+                            .attr('y', yLocation + 300)
+                            .style('font-size', '18px')
+                            .style('fill', 'red')
+                            .text('Red: ' + ' Unemployment Totals ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 50)
+                            .attr('y', yLocation + 320)
+                            .style('font-size', '18px')
+                            .style('fill', 'green')
+                            .text('Green: ' + ' Migration Into state ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 50)
+                            .attr('y', yLocation + 340)
+                            .style('font-size', '18px')
+                            .style('fill', 'blue')
+                            .text('Blue: ' + ' Migration Out of state ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 5)
+                            .attr('y', yLocation + 360)
+                            .style('font-size', '18px')
+                            .style('fill', 'black')
+                            .text('Migration Data is Scaled off Employment Data')
+                        }else{
+                            // Title of employment graph text
+                            title = 'Employment Totals';
+                            plot.append('text')
+                            .attr('x', xLocation + 400)
+                            .attr('y', yLocation - 15)
+                            .style('font-size', '20px')
+                            .text('Employment By Month')
+
+                            // Legend Text
+                            plot.append('rect')
+                            .attr('x', xLocation)
+                            .attr('y', yLocation + 275)
+                            .attr('width', 350)
+                            .attr('height', 95)
+                            .attr('fill', 'rgb(230, 230, 230)')
+                            .attr('stroke', 'red');
+                            
+                            plot.append('text')
+                            .attr('x', xLocation + 50)
+                            .attr('y', yLocation + 300)
+                            .style('font-size', '18px')
+                            .style('fill', 'red')
+                            .text('Red: ' + ' Employment Totals ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 50)
+                            .attr('y', yLocation + 320)
+                            .style('font-size', '18px')
+                            .style('fill', 'green')
+                            .text('Green: ' + ' Migration Into state ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 50)
+                            .attr('y', yLocation + 340)
+                            .style('font-size', '18px')
+                            .style('fill', 'blue')
+                            .text('Blue: ' + ' Migration Out of state ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 5)
+                            .attr('y', yLocation + 360)
+                            .style('font-size', '18px')
+                            .style('fill', 'black')
+                            .text('Migration Data is Scaled off Employment Data')
+
+                        }
+
+                    }else{
+                        // If there is only one year selected show data instead
+                        plot.append('rect')
+                            .attr('x', xLocation)
+                            .attr('y', yLocation)
+                            .attr('width', 300)
+                            .attr('height', 195)
+                            .attr('fill', 'rgb(230, 230, 230)')
+                            .attr('stroke', 'red');
+
+                        var title = '';
+                        var avgTotal = 0;
+                        if(arr == unemployedArr){
+                            title = 'Unemployment Total Avg: ';
+                            avgTotal = d3.mean(unemployedArr, (d) => d.y);
+                            avgTotal = parseInt(avgTotal);
+                        }else{
+                            title = 'Employment Total Avg: ';
+                            title = 'Unemployment Total Avg: ';
+                            avgTotal = d3.mean(employedArr, (d) => d.y);
+                            avgTotal = parseInt(avgTotal);
+                        }
+
+                        const textData = ['State: ' + selectedState, 'Year: ' + '20'+(arr[0].x).slice(-2), ''+title+'' + avgTotal,
+                        'Migration in: ' + migrationIn[0].y, 'Migration out: ' + migrationOut[0].y];
+                        console.log(textData);
+
+                        // Plot the text, style it and space it
+                        const text = plot.append('text')
+                            .attr('x', 0) 
+                            .attr('y', yLocation + 20)
+                            .style('font-size', '20px')
+
+                        text.selectAll('tspan')
+                            .data(textData)
+                            .enter().append('tspan')
+                            .attr('x', xLocation + 10)
+                            .attr('dy', (d, i) => (i * 15))
+                            .text(d => d);
+
+                        // Title of stats
+                    
+                        plot.append('text')
+                        .attr('x', xLocation + 40)
+                        .attr('y', yLocation - 10)
+                        .style('font-size', '20px')
+                        .text('Median Annual Cost Value')
+
+                    }
+                    
+                }
+                // Calls the function
+                drawGraph(employedArr, 80, 1550);
+                drawGraph(unemployedArr, 80, 1950)              
             }
 
         </script>
