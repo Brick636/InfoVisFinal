@@ -580,7 +580,8 @@
                 initalDraw(file[0])
 
                 // Function call to create crime line graphs
-                crimeLineGraph('Alaska', 2011, 2017);
+                crimeLineGraph('California', 2010, 2019);
+                CoLLineGraph('California', 2010, 2014);
             }
 
             function initalDraw(geoData) {
@@ -808,7 +809,7 @@
                             .attr('y', yLocation + 320)
                             .style('font-size', '18px')
                             .style('fill', 'green')
-                            .text('Green: ' + ' Migration into state ')
+                            .text('Green: ' + ' Migration Into state ')
 
                             plot.append('text')
                             .attr('x', xLocation + 320)
@@ -872,6 +873,223 @@
                 // Calls the function
                 drawGraph(propCrime, 100, 600);
                 drawGraph(vioCrime, 600, 600);
+                
+            }
+
+            // Function to create line graphs of crime per 100,000 people
+            function CoLLineGraph(selectedState,  startYear, endYear){
+                let svg = d3.select('svg');
+                let plot = svg.append('g');
+
+                //Incase someone selects a start year greater than end year
+                if(startYear > endYear){
+                    endYear = startYear;
+                }
+
+                // Length of our data used in years and arrays for paths
+                var len = endYear - startYear;
+                const costOfLiving = [];
+                const migrationIn = [];
+                const migrationOut = [];
+                
+                
+                // Loading path arrays from selected parameters in function
+                for(let i = 0; i <= len; i++){
+                    var year = startYear + i;
+
+                    // Load median annual cost path data and migration data
+                    costOfLiving.push({
+                        x: year,
+                        y: visData.get(selectedState).get(year).medianAnnualCost                        
+                    });
+
+                    migrationIn.push({
+                        x: year,
+                        y: (visData.get(selectedState).get(year).fromAbroadPop + visData.get(selectedState).get(year).fromDiffStatePop)
+                    });
+
+                    migrationOut.push({
+                        x: year,
+                        y: visData.get(selectedState).get(year).leftToStatesTotal
+                    });
+                }
+
+                // Draws the graph, xLocation is the start point of x-Axis, yLocation is the start of y-axis
+                function drawGraph(arr, xLocation, yLocation){
+                    if(arr.length >= 2){
+                        // Scalers based off array max and mins for x (sX) and y (sY)
+                        let sX = d3.scaleLinear()
+                            .domain([d3.max(arr, (d) => d.x), d3.min(arr, (d) => d.x)])
+                            .range([350, 0]);
+
+                        let sY = d3.scaleLinear()
+                            .domain([d3.max(arr, (d) => d.y), d3.min(arr, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for path
+                        var line = d3.line()
+                            .x((d) => sX(d.x))
+                            .y((d) => sY(d.y));
+
+                        // Set up and plot x and y axis with scaler
+                        let xAxis = d3.axisBottom(sX).tickFormat(d => d % 100);
+                        let yAxis = d3.axisLeft(sY);
+
+                        plot.append('g')
+                            .attr('transform', 'translate('+xLocation+', '+(yLocation+205)+')')
+                            .call(xAxis);
+
+                        plot.append('g')
+                            .attr('transform', 'translate('+(xLocation-5)+', '+yLocation+')')
+                            .call(yAxis);
+
+                        // Draws path based on array passed in at xLocation and yLocation for crime
+                        plot.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', line(arr))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'red')
+                            .attr('stroke-width', '1.5px')
+
+                        // Scalers based off migrationIn max and mins for x (mIsX) and y (mIsY)
+                        let mIsX = d3.scaleLinear()
+                            .domain([d3.max(migrationIn, (d) => d.x), d3.min(migrationIn, (d) => d.x)])
+                            .range([350, 0]);
+
+                        let mIsY = d3.scaleLinear()
+                            .domain([d3.max(migrationIn, (d) => d.y), d3.min(migrationIn, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for migrationIn path
+                        var mIline = d3.line()
+                            .x((d) => mIsX(d.x))
+                            .y((d) => mIsY(d.y));
+
+                        // Draws path based on migrationIn array to compare migration of incoming population
+                        plot.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', mIline(migrationIn))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'green')
+                            .attr('stroke-width', '1.5px')
+
+                        // Scalers based off migrationOut max and mins for x (mOsX) and y (mOsY)
+                        let mOsX = d3.scaleLinear()
+                            .domain([d3.max(migrationOut, (d) => d.x), d3.min(migrationOut, (d) => d.x)])
+                            .range([350, 0]);
+
+                        let mOsY = d3.scaleLinear()
+                            .domain([d3.max(migrationOut, (d) => d.y), d3.min(migrationOut, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for migrationOut path
+                        var mOline = d3.line()
+                            .x((d) => mOsX(d.x))
+                            .y((d) => mOsY(d.y));
+
+                        // Draws path based on migrationIn array to compare migration of outgoing population
+                        plot.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', mOline(migrationOut))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'blue')
+                            .attr('stroke-width', '1.5px')
+
+                        // y-axis text
+                        plot.append('text')
+                            .attr('x', xLocation - 50)
+                            .attr('y', yLocation + 170)
+                            .attr('transform', 'rotate(-90, '+(xLocation-50)+', '+(yLocation+170)+')')
+                            .style('font-size', '15px')
+                            .text('Median Annual Cost')
+
+                        // x-axis text
+                        plot.append('text')
+                            .attr('x', xLocation + 130)
+                            .attr('y', yLocation + 250)
+                            .style('font-size', '20px')
+                            .text('Year')
+                    
+                        // Title of graph text
+                        plot.append('text')
+                        .attr('x', xLocation + 100)
+                        .attr('y', yLocation - 15)
+                        .style('font-size', '20px')
+                        .text('Cost of Living')
+
+                        // Legend Text
+                        plot.append('rect')
+                        .attr('x', xLocation)
+                        .attr('y', yLocation + 275)
+                        .attr('width', 300)
+                        .attr('height', 75)
+                        .attr('fill', 'rgb(230, 230, 230)')
+                        .attr('stroke', 'red');
+                        
+                        plot.append('text')
+                        .attr('x', xLocation + 50)
+                        .attr('y', yLocation + 300)
+                        .style('font-size', '18px')
+                        .style('fill', 'red')
+                        .text('Red: ' + ' Annual Cost of Living ')
+
+                        plot.append('text')
+                        .attr('x', xLocation + 50)
+                        .attr('y', yLocation + 320)
+                        .style('font-size', '18px')
+                        .style('fill', 'green')
+                        .text('Green: ' + ' Migration Into state ')
+
+                        plot.append('text')
+                        .attr('x', xLocation + 50)
+                        .attr('y', yLocation + 340)
+                        .style('font-size', '18px')
+                        .style('fill', 'blue')
+                        .text('Blue: ' + ' Migration Out of state ')
+
+                    }else{
+                        // If there is only one year selected show data instead
+                        plot.append('rect')
+                            .attr('x', xLocation)
+                            .attr('y', yLocation)
+                            .attr('width', 300)
+                            .attr('height', 195)
+                            .attr('fill', 'rgb(230, 230, 230)')
+                            .attr('stroke', 'red');
+
+                        const textData = ['State: ' + selectedState, 'Year: ' + arr[0].x, 'Median Cost: $' + arr[0].y,
+                        'Migration in: ' + migrationIn[0].y, 'Migration out: ' + migrationOut[0].y];
+                        console.log(textData);
+
+                        // Plot the text, style it and space it
+                        const text = plot.append('text')
+                            .attr('x', 0) 
+                            .attr('y', yLocation + 20)
+                            .style('font-size', '20px')
+
+                        text.selectAll('tspan')
+                            .data(textData)
+                            .enter().append('tspan')
+                            .attr('x', xLocation + 10)
+                            .attr('dy', (d, i) => (i * 15))
+                            .text(d => d);
+
+                        // Title of stats
+                    
+                        plot.append('text')
+                        .attr('x', xLocation + 40)
+                        .attr('y', yLocation - 10)
+                        .style('font-size', '20px')
+                        .text('Median Annual Cost Value')
+
+                    }
+                    
+                }
+                // Calls the function
+                drawGraph(costOfLiving, 360, 1050);
                 
             }
 
