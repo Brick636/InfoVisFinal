@@ -581,7 +581,7 @@
 
                 // Function call to create crime line graphs
                 crimeLineGraph('California', 2010, 2019);
-                CoLLineGraph('California', 2010, 2014);
+                CoLLineGraph('Alabama', 2010, 2019);
             }
 
             function initalDraw(geoData) {
@@ -768,10 +768,10 @@
                         // y-axis text
                         plot.append('text')
                             .attr('x', xLocation - 50)
-                            .attr('y', yLocation + 170)
-                            .attr('transform', 'rotate(-90, '+(xLocation-50)+', '+(yLocation+170)+')')
-                            .style('font-size', '15px')
-                            .text('Crime Rate per 100,000')
+                            .attr('y', yLocation + 140)
+                            .attr('transform', 'rotate(-90, '+(xLocation-50)+', '+(yLocation+140)+')')
+                            .style('font-size', '20px')
+                            .text('Crime Rate')
 
                         // x-axis text
                         plot.append('text')
@@ -793,7 +793,7 @@
                             .attr('x', xLocation + 265)
                             .attr('y', yLocation + 275)
                             .attr('width', 300)
-                            .attr('height', 75)
+                            .attr('height', 95)
                             .attr('fill', 'rgb(230, 230, 230)')
                             .attr('stroke', 'red');
                             
@@ -817,6 +817,13 @@
                             .style('font-size', '18px')
                             .style('fill', 'blue')
                             .text('Blue: ' + ' Migration Out of state ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 270)
+                            .attr('y', yLocation + 360)
+                            .style('font-size', '18px')
+                            .style('fill', 'black')
+                            .text('Migration Data is Scaled off Crime Data')
 
                         }else{
                             plot.append('text')
@@ -1025,7 +1032,7 @@
                         .attr('x', xLocation)
                         .attr('y', yLocation + 275)
                         .attr('width', 300)
-                        .attr('height', 75)
+                        .attr('height', 95)
                         .attr('fill', 'rgb(230, 230, 230)')
                         .attr('stroke', 'red');
                         
@@ -1049,6 +1056,13 @@
                         .style('font-size', '18px')
                         .style('fill', 'blue')
                         .text('Blue: ' + ' Migration Out of state ')
+
+                        plot.append('text')
+                        .attr('x', xLocation + 5)
+                        .attr('y', yLocation + 360)
+                        .style('font-size', '18px')
+                        .style('fill', 'black')
+                        .text('Migration Data is Scaled off Crime Data')
 
                     }else{
                         // If there is only one year selected show data instead
@@ -1089,8 +1103,7 @@
                     
                 }
                 // Calls the function
-                drawGraph(costOfLiving, 360, 1050);
-                
+                drawGraph(costOfLiving, 360, 1050);              
             }
 
         </script>
