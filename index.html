@@ -1,245 +1,880 @@
 <!DOCTYPE html>
 <html>
-<head>
-<script type = "text/javascript" src = "https://d3js.org/d3.v7.min.js"></script>
-<script type = "text/javascript" src = "https://d3js.org/topojson.v3.min.js"></script>
-</head>
+    <head>
+        <script type = "text/javascript" src = "https://d3js.org/d3.v7.min.js"></script>
+        <script type = "text/javascript" src = "https://d3js.org/topojson.v3.min.js"></script>
+    </head>
 
-<body>
-<svg width="1000" height="1000"></svg> <p>
+    <body>
+        <svg width="1200" height="4000"></svg> <p>
 
-<script>
-	
-    Promise.all([
-	d3.json('datafiles/us_states_data.json'), //file[0]
-    d3.csv('datafiles/Migration_Flows_from_2010_to_2019.csv'), //file[1]
-    d3.csv('datafiles/state_crime.csv'), //file[2]
-    d3.csv('datafiles/average_monthly_temperature_by_state_1950-2022.csv'), //file[3]
-    d3.csv('datafiles/State_Taxes.csv'), //file[4]
-    d3.csv('datafiles/Unemployment in America Per US State.csv'), //file[5]
-    d3.csv('datafiles/fbc_data_2022_county.csv') //file[6]
-    ]). then(function(file) 
-    {
-		//Arrays for our data
-        var migrationInfo = [];
-        var crimeInfo = [];
-        var weatherInfo = [];
-        var taxInfo = [];
-        var employmentInfo = [];
-        var costOfLiving = [];
-        //Normalized arrays for our data
-        var normMigrationInfo = [];
-        var normCrimeInfo = [];
-        var normWeatherInfo = [];
-        var normTaxInfo = [];
-        var normEmploymentInfo = [];
-        var normCostOfLiving = [];
+        <script>
 
-        
+            // Map that holds a snapshot for every state at every year.
+            var visData = new Map();
 
-        // Migration array population
-        for(let i = 0; i < file[1].length; i++){
-            var dict = {
-                state: String(file[1][i].current_state),  // Current state
-                year: parseInt(file[1][i].year),                   // Current year
-                population: parseInt(file[1][i].population),       // Current state and year population
-                fromDiffState: parseInt(file[1][i].from_different_state_Total), // Number of people migrating to state from a different state
-                fromAbroad: parseInt(file[1][i].abroad_Total),                  // Number of people migrating to state from abroad
-                from: String(file[1][i].from),                                // State where people migrated
-                numPeopleFrom: parseInt(file[1][i].number_of_people)        // Number of people from said state above
-            };
-            migrationInfo.push(dict);
-            normMigrationInfo.push(JSON.parse(JSON.stringify(dict)));
-        };
+            // Start the program by loading in the data, preparing it for processing.
+            loadData(['datafiles/us_states_data.json', // file[0]
+                'datafiles/Migration_Flows_from_2010_to_2019.csv', // file[1]
+                'datafiles/state_crime.csv', // file[2]
+                'datafiles/average_monthly_temperature_by_state_1950-2022.csv', // file[3]
+                'datafiles/State_Taxes.csv', // file[4]
+                'datafiles/Unemployment in America Per US State.csv', // file[5]
+                'datafiles/fbc_data_2022_county.csv', // file[6]
+                'datafiles/us_postal_codes.csv' //file[7]
+            ])
 
-        // Crime array population
-        for(let i = 0; i < file[2].length; i++){
-            if(parseInt(file[2][i].Year) >= 2010){ // Ignores anything before 2010
-                var dict = {
-                    state: String(file[2][i].State), // State for crime rates
-                    year: parseInt(file[2][i].Year),  // Year for crime rates
-                    propCrimRate: parseFloat(file[2][i].Data_Rates_Property_All),  // Property crime rates per 100,000
-                    vioCrimRate: parseFloat(file[2][i].Data_Rates_Violent_All)  // Violent crime rates per 100,000
-                };
-                crimeInfo.push(dict);
-                normCrimeInfo.push(JSON.parse(JSON.stringify(dict)));
-            };
-        };
+            // This function will ensure that we load all outside data successfully.
+            function loadData (url=[]) {
 
-        // Weather array population
-        for(let i = 0; i < file[3].length; i++){
-            if(parseInt(file[3][i].year) >= 2010 && parseInt(file[3][i].year) <= 2019){
-                var dict = {
-                    state: String(file[3][i].state), // State for year and month temp   
-                    month: parseInt(file[3][i].month), // Month of the year ex.01 = january
-                    year: parseInt(file[3][i].year),  // Year for average
-                    avgTemp: parseFloat(file[3][i].average_temp)  // Average temperature for the month of the year
-                };
-                weatherInfo.push(dict);
-                normWeatherInfo.push(JSON.parse(JSON.stringify(dict)));
-            };
-        };
+                // Array that will hold all of our promises.
+                let promises = []
 
-        // Taxes array population
-        for(let i =0; i < file[4].length; i++){
-            if( parseInt(file[4][i].year) <= 2019){
-                var dict = {
-                    state: String(file[4][i].State),    // State for the tax rates by year
-                    year: parseInt(file[4][i].year),    // Year fo tax rates
-                    incomeTax: parseFloat(file[4][i].Pers_Rate_Adj),  // Highest personal income tax rate by state
-                    salesTax: parseFloat(file[4][i].Sales_Rate_Adj) // Highest Sales tax rate by state
-                };
-                taxInfo.push(dict);
-                normTaxInfo.push(JSON.parse(JSON.stringify(dict)));
-            };
-        };
+                // For each URL we will:
+                // - What extension it has.
+                // - Perform the appropriate d3 data extraction based on the extension.
+                url.forEach((currURL) => {
 
-        // Employment array population
-        for(let i =0; i < file[5].length; i++){
-            if(parseInt(file[5][i].Year) >= 2010 && parseInt(file[5][i].Year) <= 2019){
-                var dict = {
-                    state: String(file[5][i].State_Area),  // State for employment rates
-                    year: parseInt(file[5][i].Year),  // Year for employment rates
-                    month: parseInt(file[5][i].Month),  // Month of the year for employment rates
-                    employed: parseInt(file[5][i].Total_Employment.replace(/,/g, '')),  // Total employed in state
-                    umemployed: parseInt((file[5][i].Total_Unemployment).replace(/,/g, '')),  // Total unemployed in state
-                    percentEmp: parseFloat(file[5][i].Percent_Employed),  // Percent of total employed in state
-                    percentUnemp: parseFloat(file[5][i].Percent_Unemployed)  // Percent of total unemployed in state
-                };
-                employmentInfo.push(dict);
-                normEmploymentInfo.push(JSON.parse(JSON.stringify(dict)));
-            };
-        };
+                    // Variable that holds the current extension
+                    let currExt = currURL.slice(currURL.indexOf('.'))
 
-        // Function calculates the median values of each state
-        function medianCostOfLiving() {
-            totalArr = [];
-            for (let i = 0; i < file[6].length; i++) {
-                var state = String(file[6][i].State_abv);
-                var total = parseInt(file[6][i].A_Total.replace("$", "").replace(",", ""));
+                    // Create a switch that appends a new promise based on the extension being called.
+                    switch (currExt) {
+                        case '.json':
+                            promises.push(new Promise( (resolve, reject) => {
+                                // Attempt to load in the data.
+                                let loadedData = d3.json(currURL)
 
-                if (i > 0 && state === costOfLiving[costOfLiving.length-1].state) {
-                    totalArr.push(total);
-                }else{
+                                // If we failed to load in the data (Which we are classifying as an empty dataset)
+                                // then we send a rejection. Else, resolve with the loaded data.
+                                if (loadedData.length === 0) reject(`Failed to Load Data: ${url[i]}`)
+                                else resolve(loadedData)
+                            }))
+                            break
+                        case '.csv':
+                            promises.push(new Promise( (resolve, reject) => {
+                                // Attempt to load in the data.
+                                let loadedData = d3.csv(currURL)
 
-                    var sortedArr = totalArr.sort((a, b) => a - b);
-                    var midIndex = Math.floor(totalArr.length / 2);
-                    var median = sortedArr[midIndex];
+                                // If we failed to load in the data (Which we are classifying as an empty dataset)
+                                // then we send a rejection. Else, resolve with the loaded data.
+                                if (loadedData.length === 0) reject(`Failed to Load Data: ${url[i]}`)
+                                else resolve(loadedData)
+                            }))
+                            break
+                        default: console.log(`Undefined case for: "${currExt}"`)
+                    }
+                })
 
-                    var dict = {
-                        state: state,  // State abreviation
-                        total: median  // total median values
-                    };
-
-                    costOfLiving.push(dict);
-                    totalArr = [];   
-                }
+                // Once the forEach loop has finished running, test to see that all promises resolved (loaded all data).
+                // If so, the program will send the raw data to the drawGeo() function.
+                // If not, the program will halt.
+                Promise.all(promises).then((file) => processData(file))
             }
-            for(let i = 0; i < costOfLiving.length-1; i++){
-                costOfLiving[i].total = costOfLiving[i+1].total;
-            }
-            // Manually calculated and entered median total for 'WY'
-            costOfLiving[costOfLiving.length - 1].total = 82655;
-            normCostOfLiving = JSON.parse(JSON.stringify(costOfLiving));
-        }
-        medianCostOfLiving();
 
-        // Function to normalize arrays between 0 and 1
-        // Year and month are also normalized, use original arrays for year and month,
-        // Both arrays have the same keys and lengths
-        // Function also makes sure Strings are ignored in normalization
-        function normalize(arrToNorm, newArr){
-            var column = 0;
-            var max = [];
-            var min = [];
-            keyArray = Object.keys(arrToNorm[0]);
-            key = String(keyArray[column]);
-            while(column < keyArray.length){
-                for(let i = 0; i < arrToNorm.length; i++){
-                    if(typeof arrToNorm[i][key] == 'string'){
+            // This function will process the loaded data into the visData map.
+            function processData(file) {
+
+                // Arrays for our data
+                var migrationInfo = [];
+                var crimeInfo = [];
+                var weatherInfo = [];
+                var taxInfo = [];
+                var employmentInfo = [];
+                var costOfLiving = [];
+
+                // Normalized arrays for our data
+                var normMigrationInfo = [];
+                var normCrimeInfo = [];
+                var normWeatherInfo = [];
+                var normTaxInfo = [];
+                var normEmploymentInfo = [];
+                var normCostOfLiving = [];
+
+                // Anonymous function to normalize arrays between 0 and 1
+                // Year and month are also normalized, use original arrays for year and month,
+                // Both arrays have the same keys and lengths
+                // Function also makes sure Strings are ignored in normalization
+                const normalize = (arrToNorm, newArr) => {
+                    var column = 0;
+                    var max = [];
+                    var min = [];
+                    keyArray = Object.keys(arrToNorm[0]);
+                    key = String(keyArray[column]);
+                    while(column < keyArray.length){
+                        for(let i = 0; i < arrToNorm.length; i++){
+                            if(typeof arrToNorm[i][key] == 'string'){
+                                column++;
+                                key = String(keyArray[column]);
+                                i=0;
+                            }else{
+                                max.push(arrToNorm[i][key]);
+                                min.push(arrToNorm[i][key]);
+                            }
+                        }
+
+                        var maxVal = Math.max(...max);
+                        var minVal = Math.min(...min);
+
+                        for(let i = 0; i < arrToNorm.length; i++){
+                                var normVal = (arrToNorm[i][key] - minVal)/(maxVal-minVal);
+                                newArr[i][key] = normVal;
+                            }
+                        max = [];
+                        min = [];
                         column++;
                         key = String(keyArray[column]);
-                        i=0;
-                    }else{
-                        max.push(arrToNorm[i][key]);
-                        min.push(arrToNorm[i][key]);
-                    }    
-                }
-                
-                var maxVal = Math.max(...max);
-                var minVal = Math.min(...min);
-
-                for(let i = 0; i < arrToNorm.length; i++){
-                        var normVal = (arrToNorm[i][key] - minVal)/(maxVal-minVal);
-                        newArr[i][key] = normVal;
                     }
-                max = [];
-                min = [];
-                column++;
-                key = String(keyArray[column]);
+                }
+
+                // Migration array population
+                for(let i = 0; i < file[1].length; i++){
+                    var dict = {
+                        state: String(file[1][i].current_state),  // Current state
+                        year: parseInt(file[1][i].year),                   // Current year
+                        population: parseInt(file[1][i].population),       // Current state and year population
+                        fromDiffState: parseInt(file[1][i].from_different_state_Total), // Number of people migrating to state from a different state
+                        fromAbroad: parseInt(file[1][i].abroad_Total),                  // Number of people migrating to state from abroad
+                        from: String(file[1][i].from),                                // State where people migrated
+                        numPeopleFrom: parseInt(file[1][i].number_of_people)        // Number of people from said state above
+                    };
+                    migrationInfo.push(dict);
+                    normMigrationInfo.push(JSON.parse(JSON.stringify(dict)));
+                };
+
+                // Crime array population
+                for(let i = 0; i < file[2].length; i++){
+                    if(parseInt(file[2][i].Year) >= 2010){ // Ignores anything before 2010
+                        var dict = {
+                            state: String(file[2][i].State), // State for crime rates
+                            year: parseInt(file[2][i].Year),  // Year for crime rates
+                            propCrimRate: parseFloat(file[2][i].Data_Rates_Property_All),  // Property crime rates per 100,000
+                            vioCrimRate: parseFloat(file[2][i].Data_Rates_Violent_All)  // Violent crime rates per 100,000
+                        };
+                        crimeInfo.push(dict);
+                        normCrimeInfo.push(JSON.parse(JSON.stringify(dict)));
+                    };
+                };
+
+                // Weather array population
+                for(let i = 0; i < file[3].length; i++){
+                    if(parseInt(file[3][i].year) >= 2010 && parseInt(file[3][i].year) <= 2019){
+                        var dict = {
+                            state: String(file[3][i].state), // State for year and month temp
+                            month: parseInt(file[3][i].month), // Month of the year ex.01 = january
+                            year: parseInt(file[3][i].year),  // Year for average
+                            avgTemp: parseFloat(file[3][i].average_temp)  // Average temperature for the month of the year
+                        };
+                        weatherInfo.push(dict);
+                        normWeatherInfo.push(JSON.parse(JSON.stringify(dict)));
+                    };
+                };
+
+                // Taxes array population
+                for(let i =0; i < file[4].length; i++){
+                    if( parseInt(file[4][i].year) <= 2019){
+                        var dict = {
+                            state: String(file[4][i].State),    // State for the tax rates by year
+                            year: parseInt(file[4][i].year),    // Year of tax rates
+                            incomeTax: parseFloat(file[4][i].Pers_Rate_Adj),  // Highest personal income tax rate by state
+                            salesTax: parseFloat(file[4][i].Sales_Rate_Adj) // Highest Sales tax rate by state
+                        };
+                        taxInfo.push(dict);
+                        normTaxInfo.push(JSON.parse(JSON.stringify(dict)));
+                    };
+                };
+
+                // Employment array population
+                for(let i =0; i < file[5].length; i++){
+                    if(parseInt(file[5][i].Year) >= 2010 && parseInt(file[5][i].Year) <= 2019){
+                        var dict = {
+                            state: String(file[5][i].State_Area),  // State for employment rates
+                            year: parseInt(file[5][i].Year),  // Year for employment rates
+                            month: parseInt(file[5][i].Month),  // Month of the year for employment rates
+                            employed: parseInt(file[5][i].Total_Employment.replace(/,/g, '')),  // Total employed in state
+                            umemployed: parseInt((file[5][i].Total_Unemployment).replace(/,/g, '')),  // Total unemployed in state
+                            percentEmp: parseFloat(file[5][i].Percent_Employed),  // Percent of total employed in state
+                            percentUnemp: parseFloat(file[5][i].Percent_Unemployed)  // Percent of total unemployed in state
+                        };
+                        employmentInfo.push(dict);
+                        normEmploymentInfo.push(JSON.parse(JSON.stringify(dict)));
+                    };
+                };
+
+                // Function calculates the median values of each state
+                function medianCostOfLiving() {
+                    totalArr = [];
+                    for (let i = 0; i < file[6].length; i++) {
+                        var state = String(file[6][i].State_abv);
+                        var total = parseInt(file[6][i].A_Total.replace("$", "").replace(",", ""));
+
+                        if (i > 0 && state === costOfLiving[costOfLiving.length-1].state) {
+                            totalArr.push(total);
+                        }else{
+
+                            var sortedArr = totalArr.sort((a, b) => a - b);
+                            var midIndex = Math.floor(totalArr.length / 2);
+                            var median = sortedArr[midIndex];
+
+                            var dict = {
+                                state: state,  // State abreviation
+                                total: median  // total median values
+                            };
+
+                            costOfLiving.push(dict);
+                            totalArr = [];
+                        }
+                    }
+                    for(let i = 0; i < costOfLiving.length-1; i++){
+                        costOfLiving[i].total = costOfLiving[i+1].total;
+                    }
+                    // Manually calculated and entered median total for 'WY'
+                    costOfLiving[costOfLiving.length - 1].total = 82655;
+                    normCostOfLiving = JSON.parse(JSON.stringify(costOfLiving));
+                }
+                medianCostOfLiving();
+
+                // Postal map that will convert the abbreviated symbols of states to their full name.
+                var postalToState = new Map();
+
+                // For each object in the file, send it to the postalToState map.
+                file[7].forEach((code) => {
+                    postalToState.set(code.postal_code, code.state)
+                })
+
+                //Function calls to create normalized arrays
+                normalize(migrationInfo, normMigrationInfo);
+                normalize(crimeInfo, normCrimeInfo);
+                normalize(weatherInfo, normWeatherInfo);
+                normalize(taxInfo, normTaxInfo);
+                normalize(employmentInfo, normEmploymentInfo);
+                normalize(costOfLiving, normCostOfLiving);
+
+                // Now we will prepare a time-series for each state (including DC) by year.
+                // What follows is a general construction of the map:
+                /*
+                    (KEY - STRING) : (VALUE - MAP())
+                    State : Map of Years
+
+                        (KEY - INT) : (VALUE - OBJ{})
+                        Year : Snapshot
+
+                        MAP(
+                        AK,
+                            MAP(
+                            2010
+                                Snapshot
+                            2011
+                            ...
+                            2019
+                        NY,
+                        CA,
+                        .....
+
+                    Snapshot structure:
+                    Snapshot {
+                        year: year of the snapshot
+                        stateName: Name of the state
+                        population: Population at the time
+                        
+                        fromDiffStatePop: Population that came from a different state within the last year.
+                        fromAbroadPop: Like the above, but people who came from abroad. Is *NOT* a subset of fromDiffStatePop
+
+                        arrivedFromStates: Map() consisting of the population of people who arrived from different states.
+                            Each key:value pair is the state they came from and how many that did. Does not include those who arrived from Abroad as it is already counted by fromAbroadPop.
+                        leftToStates: Map() consisting of the population of people who left to different states. [Will be a bit tricky to do, but not impossible]
+                            Each key:value pair is the state they left to and how many went. Should be noted that this number is *not* included in the population snapshot!
+
+                        leftToStatesTotal: Population that left the state, based on the total of LeftByState.
+
+                        violentCrimeCapita: What it says on the tin.
+
+                        propertyCrimeCapita: What it says on the tin.
+
+                        tempInfo: size-12 array that has the average temperatures of the state by month. (0 = jan, 12 = dec)
+
+                        incomeTax: hmmm
+
+                        salesTax: hmmmm
+
+                        unemploymentInfo: size-12 array (0 = jan, 12 = dec) by month. Each index holds an object consisting of:
+                            - Total employed in state
+                            - Total unemployed in state
+                            - Percentages of each
+
+                        //normalized data will be dragged in as needed\\
+                        medianAnnualCost: the median annual cost to live a modest life within the state. Adjusted by inflation.
+                    }
+
+                */
+
+                /* DEBUG */
+                // console.log(migrationInfo);
+                //console.log(normMigrationInfo);
+                //console.log(crimeInfo);
+                //console.log(normCrimeInfo);
+                // console.log(weatherInfo);
+                //console.log(normWeatherInfo);
+                // console.log(taxInfo);
+                //console.log(normTaxInfo);
+                //console.log(employmentInfo);
+                //console.log(normEmploymentInfo);
+                //console.log(costOfLiving);
+                //console.log(normCostOfLiving);
+
+                // An anonymous function that will return a unique set of values within a passed array.
+                const findUniques = (array) => {
+
+                    // Performing the union of a set of values on itself will return the distinct values within it.
+                    return d3.union(array, array);
+                }
+
+                // Array containing the unique set of state name from the migration dataset
+                let uniqueStates = Array.from(findUniques(d3.map(migrationInfo, (obj) => obj.state))["_intern"].values())
+
+                // Hotfix for District of Columbia (has a space at the end of name)
+                uniqueStates[8] = "District of Columbia"
+
+                // Base template that defines how a snapshot is constructed
+                const snapShotDataTemplate = {
+                    year: null, // Year of the snapshot
+                    state: null, // Name of the state.
+                    stateHTMLID: null, // HTML ID of the state for retrieval.
+
+                    population: null, // Population of the state at the time of the year.
+
+                    fromDiffStatePop: null, // Portion of that population that came from a different state a year ago.
+                    fromAbroadPop: null, // Portion of that population that came from outside the 50 (plus DC) states.
+
+                    arrivedFromStates: null, // Map that shows which states people came from.
+                    leftToStates: null, // Map that shows what states the uncounted population left to for that year.
+                    
+                    leftToStatesTotal: null, // Total number of people who left the state that isn't counted in the population.
+
+                    violentCrimeCapita: null, // Rate of violent crime per 100,000 people.
+                    propertyCrimeCapita: null, // Rate of property crime per 100,000 people.
+
+                    monthlyTempAvg: null, // Size-12 array giving monthly temperature averages.
+
+                    incomeTax: null, // Highest personal income tax rate in the state
+                    salesTax: null, // Highest Sales tax rate in the state
+
+                    unemploymentInfo: null, // Size-12 array detailing the employed/unemployed population and their percentages.
+
+                    medianAnnualCost: null // Median annual cost to live in the state at that year, adjusted for inflation.
+                }
+
+                // Base template that governs how far back in time each dataset we must explore.
+                const yearsDataTemplate = [
+                                [2010, snapShotDataTemplate],
+                                [2011, snapShotDataTemplate],
+                                [2012, snapShotDataTemplate],
+                                [2013, snapShotDataTemplate],
+                                [2014, snapShotDataTemplate],
+                                [2015, snapShotDataTemplate],
+                                [2016, snapShotDataTemplate],
+                                [2017, snapShotDataTemplate],
+                                [2018, snapShotDataTemplate],
+                                [2019, snapShotDataTemplate]
+                ]
+
+                // Populate the snapshot map with all unique state names as the keys and general structure.
+                uniqueStates.forEach((currUState) => {
+
+
+                    // Build the data structure for each state as deep copies of the template supplied above.
+                    visData.set(currUState, new Map(JSON.parse(JSON.stringify(yearsDataTemplate))))
+
+                    // Grab the current state on the visData map.
+                    let currentStateMap = visData.get(currUState)
+
+                    // Iterating through each year of the selected unique state, fill out some of the snapshot information for each year.
+                    currentStateMap.forEach((currYearSnapshot) => {
+                        currYearSnapshot.state = currUState
+                        currYearSnapshot.stateHTMLID = currUState.replaceAll(' ', '-')
+                        currYearSnapshot.arrivedFromStates = new Map()
+                        currYearSnapshot.leftToStates = new Map()
+                        currYearSnapshot.monthlyTempAvg = new Array(12)
+                        currYearSnapshot.unemploymentInfo = new Array(12)
+                    })
+                })
+                
+                // Iterate through each migrationInfo object and assign information from it to the visData.
+                migrationInfo.forEach((migObj) => {
+
+                    // Extract the state name of the object
+                    let stateKey = migObj.state
+
+                    // Testing for the misspelled version DC in the objects.
+                    const testForDC = "District of Columbia "
+
+                    // If found, replace it with the correct name in order to extract the snapshot in visData.
+                    if (stateKey === testForDC) stateKey = "District of Columbia"
+
+                    // Extract the 'from' string as our key.
+                    let fromKey = migObj.from
+
+                    // If found, replace it with the correct name in order to extract the snapshot in visData.
+                    if (fromKey === testForDC) fromKey = "District of Columbia"
+
+                    // Grab the snapshot corresponding to the state and year of the object.
+                    let currSnapshot = visData.get(stateKey).get(migObj.year)
+
+                    // Now, with the current snapshot, we will begin filling in some of the information.
+                    currSnapshot.year = migObj.year
+                    currSnapshot.population = migObj.population
+                    currSnapshot.fromDiffStatePop = migObj.fromDiffState
+                    currSnapshot.fromAbroadPop = migObj.fromAbroad
+
+                    // Perform the following tests if the information in 'from' isn't from abroad [abroad_ForeignCountry, abroad_PuertoRico, abroad_USIslandArea]
+                    // Seeing how no other 'from' values has an underscore, we test for the presence of this using indexOf('_')
+                    if (migObj.from.indexOf("_") === -1){
+
+                        // Prepare the key that will be used to define and retrieve the values of entries in leftToStates.
+                        const fromHTMLIDKey = fromKey.replaceAll(' ', "-")
+
+                        // Test to see if the arrivedFromStates has the state (or place) defined in 'from'
+                        if (!currSnapshot.arrivedFromStates.has(fromHTMLIDKey)) {
+
+                            // If not, create a new entry using the 'from' as the key and 'numPeopleFrom' as the value.
+                            currSnapshot.arrivedFromStates.set(fromHTMLIDKey, migObj.numPeopleFrom)
+                        } else {
+                            // If so, take the value that is already present and add it onto the incoming value.
+                            currSnapshot.arrivedFromStates.set(fromHTMLIDKey, (currSnapshot.arrivedFromStates.get(fromHTMLIDKey) + migObj.numPeopleFrom))
+                        }
+                    }
+
+                    // Now, with the same migObj, we will use the 'from' to access the visObj again to add to the 'leftToStates' counter.
+
+                    // Test to see if the visData has the snapshot corresponding to the state in question.
+                    // If it doesn't, or the object is about Puerto Rico, move on.
+                    if (visData.has(fromKey) && migObj.state !== "Puerto Rico"){
+
+                        // Retrieve the snapshot corresponding to the given fromKey.
+                        currSnapshot = visData.get(fromKey).get(migObj.year)
+
+                        // Prepare the key that will be used to define and retrieve the values of entries in leftToStates.
+                        const stateHTMLIDKey = stateKey.replaceAll(' ', "-")
+
+                        // Test to see if the leftToStates has the state (or place) defined in 'state'
+                        if (!currSnapshot.leftToStates.has(stateHTMLIDKey)){
+
+                            // If not, create a new entry using the 'state', in HTML ID form, as the key and 'numPeopleFrom' as the value.
+                            currSnapshot.leftToStates.set(stateHTMLIDKey, migObj.numPeopleFrom)
+                        } else {
+                            // If so, take the value that is already present and add it onto the incoming value.
+                            currSnapshot.leftToStates.set(stateHTMLIDKey, (currSnapshot.leftToStates.get(stateHTMLIDKey) +  migObj.numPeopleFrom))
+                        }
+                    }
+
+                })
+
+                // Considering that we have no other databases beyond the migration info to visualize and correlate information for Puerto Rico,
+                // it is to be removed from the visData Map.
+                visData.delete("Puerto Rico")
+
+                // Now, iterate through each state.
+                visData.forEach((years) => {
+
+                    // Within each set of years for a state, iterate through its snapshots and calculate the number of people who left the state on that year.
+                    years.forEach((snapshot) => snapshot.leftToStatesTotal = d3.reduce(snapshot.leftToStates, (totalVal, stateVal) => totalVal + stateVal[1], 0))
+                })
+
+                // Iterate through each crimeInfo object and assign information from it to the visData.
+                crimeInfo.forEach((criObj) => {
+
+                    // So long as it isn't the information for the United States as a whole, continue.
+                    if (criObj.state !== 'United States') {
+
+                        // Grab the snapshot that matches the state and year of the crime object.
+                        let currSnapshot = visData.get(criObj.state).get(criObj.year)
+
+                        // Assign the violent crime capita rate.
+                        currSnapshot.violentCrimeCapita = criObj.propCrimRate
+
+                        // Assign the property crime capita rate.
+                        currSnapshot.propertyCrimeCapita = criObj.vioCrimRate
+                    }
+                })
+
+                // Iterate through each weatherInfo object and assign information from it to the visData.
+                weatherInfo.forEach((weaObj) => {
+
+                    // Grab the snapshot that matches the state and year of the weather object.
+                    let currSnapshot = visData.get(weaObj.state).get(weaObj.year)
+
+                    // Using the month value (minus 1), insert the avgTemp of the weaObj at the proper index.
+                    currSnapshot.monthlyTempAvg[weaObj.month - 1] = weaObj.avgTemp
+                })
+
+                // Iterate through each taxInfo object and assign information from it to the visData.
+                taxInfo.forEach((taxObj) => {
+
+                    // Grab the snapshot that matches the state and year of the tax object.
+                    let currSnapshot = visData.get(taxObj.state).get(taxObj.year)
+
+                    // Assign the income rate as a percentage.
+                    currSnapshot.incomeTax = taxObj.incomeTax / 100.00
+
+                    // Assign the sales rate as a percentage.
+                    currSnapshot.salesTax = taxObj.salesTax / 100.00
+                })
+
+                // Iterate through each employmentInfo object and assign information from it to the visData.
+                employmentInfo.forEach((empObj) => {
+
+                    // So long as the information isn't for Los Angeles County and New York City, continue.
+                    if (empObj.state !== 'Los Angeles County' && empObj.state !== 'New York city') {
+
+                        // Grab the snapshot that matches the state and year of the employment object.
+                        let currSnapshot = visData.get(empObj.state).get(empObj.year)
+
+                        // Prepare an employment object consisting of all the information found in empObj.
+                        // Using the month value (minus 1), insert the avgTemp of the weaObj at the proper index.
+                        currSnapshot.unemploymentInfo[empObj.month - 1] = {
+                            state: empObj.state,
+                            year: empObj.year,
+                            month: empObj.month,
+                            employed: empObj.employed,
+                            unemployed: empObj.umemployed,
+                            percentEmp: empObj.percentEmp,
+                            percentUnemp: empObj.percentUnemp,
+                        }
+                    }
+                })
+
+                // The EPI states that the FBC data of 2022 uses "2020 dollars"
+                // This means we need to use the average CPI of 2020 in order to perform our calculations.
+                // Retrieved from: https://data.bls.gov/timeseries/CUUR0000SA0
+                const avgCPIbyYear = new Map([
+                    [2020, 258.811],
+                    [2019, 255.657],
+                    [2018, 251.107],
+                    [2017, 245.120],
+                    [2016, 240.007],
+                    [2015, 237.017],
+                    [2014, 236.736],
+                    [2013, 232.957],
+                    [2012, 229.594],
+                    [2011, 224.939],
+                    [2010, 218.056],
+                ])
+
+                // Iterate through each costOfLiving object and assign information from it to the visData.
+                costOfLiving.forEach((costObj) => {
+
+                    // Convert the abbreviated name of the state to its full name.
+                    const stateName = postalToState.get(costObj.state);
+
+                    // Retrieve the years belonging to the state in question.
+                    const yearsToParse = visData.get(stateName)
+
+                    // For each year, adjust the value of costObj's value by referring to the inflation at the time.
+                    // The formula for calculating the dollar value of a previous year against 2020's year is:
+                    // Past Dollar Amount = Current Dollar Amount * Past Year's CPI Amount / Current Year's CPI
+                    yearsToParse.forEach((currSnapshot, pastYear) => currSnapshot.medianAnnualCost = Math.round(parseInt(costObj.total) * avgCPIbyYear.get(pastYear) / avgCPIbyYear.get(2020)))
+
+                })
+
+                // Leave this function, de-referencing all objects that aren't included in the visData map.
+                initalDraw(file[0])
+
+                // Function call to create crime line graphs
+                crimeLineGraph('Alaska', 2011, 2017);
             }
-        }
 
-        //Function calls to create normalized arrays
-        normalize(migrationInfo, normMigrationInfo);
-        normalize(crimeInfo, normCrimeInfo);
-        normalize(weatherInfo, normWeatherInfo);
-        normalize(taxInfo, normTaxInfo);
-        normalize(employmentInfo, normEmploymentInfo);
-        normalize(costOfLiving, normCostOfLiving);
-        // console.log(migrationInfo);
-        // console.log(normMigrationInfo);
-        // console.log(crimeInfo);
-        // console.log(normCrimeInfo);
-        // console.log(weatherInfo);
-        // console.log(normWeatherInfo);
-        // console.log(taxInfo);
-        // console.log(normTaxInfo);
-        // console.log(employmentInfo);
-        // console.log(normEmploymentInfo);
-        //console.log(costOfLiving);
-        //console.log(normCostOfLiving);
+            function initalDraw(geoData) {
 
-        // set up the projection and its mapping to the display
-		let projection = d3.geoEquirectangular();
-			projection.fitSize([800,800], file[0]);
+                // Debug to see the structure of the visData
+                console.log(visData)
 
-		// create a SVG path generator
-		let generator = d3.geoPath()
-			.projection(projection);
+                // Draw the US map.
+                initialDrawMap(geoData)
+            }
 
-		// create svg symbol, set offset for the plot
-		let svg = d3.select("svg")
-			.attr('transform', 'translate(50, 50)')
+            function initialDrawMap(geojson){
 
-		let	width = svg.attr("width"),
-			height = svg.attr("height");
+                // set up the projection and its mapping to the display
+                let projection = d3.geoEquirectangular();
+                    projection.fitSize([800,800], geojson);
 
-		// put it in a group
-		let plot = svg.append("g")
-	   	.attr('transform', 'translate(0,0)')
-	
-		// Add the paths to the plot. The features key can hold multiple path data
-		// which is iterated through in the following code
-		// The generator reads the needed geometry for the whole state, which
-		// is a set of polygons - see the data file and its structure.
-		plot.selectAll('paths')
-			.data(file[0].features)
-			.enter()
-			.append('path')
-			.attr('d', generator)
-			.attr('stroke', 'red')
-			.attr('fill', 'green')
-			.attr('opacity', 0.9)
-			.attr('stroke-width', 2)
+                // create a SVG path generator
+                let generator = d3.geoPath()
+                    .projection(projection);
 
-            // let v  = projection([-80.83, 35.229]);    
-            // plot.append('circle')
-            // 	.attr('fill', '#ff00ff')
-            // 	.attr('r', 5)
-            // 	.attr('cx', v[0])
-            // 	.attr('cy', v[1])
-        })
-</script>
-</body>
+                // create svg symbol, set offset for the plot
+                let svg = d3.select("svg")
+                    .attr('transform', 'translate(50, 50)')
+
+                let	width = svg.attr("width"),
+                    height = svg.attr("height");
+
+                // put it in a group
+                let plot = svg.append("g")
+                .attr('transform', 'translate(0,0)')
+
+                // Add the paths to the plot. The features key can hold multiple path data
+                // which is iterated through in the following code
+                // The generator reads the needed geometry for the whole state, which
+                // is a set of polygons - see the data file and its structure.
+                plot.selectAll('paths')
+                    .data(geojson.features)
+                    .enter()
+                    .append('path')
+                    .attr('d', generator)
+                    .attr('stroke', 'red')
+                    .attr('fill', 'green')
+                    .attr('opacity', 0.9)
+                    .attr('stroke-width', 2)
+
+                    // let v  = projection([-80.83, 35.229]);
+                    // plot.append('circle')
+                    // 	.attr('fill', '#ff00ff')
+                    // 	.attr('r', 5)
+                    // 	.attr('cx', v[0])
+                    // 	.attr('cy', v[1])
+            }
+
+            // Function to create line graphs of crime per 100,000 people
+            function crimeLineGraph(selectedState,  startYear, endYear){
+                let svg = d3.select('svg');
+                let plot = svg.append('g');
+
+                //Incase someone selects a start year greater than end year
+                if(startYear > endYear){
+                    endYear = startYear;
+                }
+
+                // Length of our data used in years and arrays for paths
+                var len = endYear - startYear;
+                const propCrime = [];
+                const vioCrime = [];
+                const migrationIn = [];
+                const migrationOut = [];
+                
+                
+                // Loading path arrays from selected parameters in function
+                for(let i = 0; i <= len; i++){
+                    var year = startYear + i;
+
+                    // Load property crime path data and migration data
+                    propCrime.push({
+                        x: year,
+                        y: visData.get(selectedState).get(year).propertyCrimeCapita                        
+                    });
+
+                    // Load violent crime path data
+                    vioCrime.push({
+                        x: year,
+                        y: visData.get(selectedState).get(year).violentCrimeCapita
+                    })
+
+                    migrationIn.push({
+                        x: year,
+                        y: (visData.get(selectedState).get(year).fromAbroadPop + visData.get(selectedState).get(year).fromDiffStatePop)
+                    });
+
+                    migrationOut.push({
+                        x: year,
+                        y: visData.get(selectedState).get(year).leftToStatesTotal
+                    });
+                }
+
+                // Draws the graph, xLocation is the start point of x-Axis, yLocation is the start of y-axis
+                function drawGraph(arr, xLocation, yLocation){
+                    if(arr.length >= 2){
+                        // Scalers based off array max and mins for x (sX) and y (sY)
+                        let sX = d3.scaleLinear()
+                            .domain([d3.max(arr, (d) => d.x), d3.min(arr, (d) => d.x)])
+                            .range([350, 0]);
+
+                        let sY = d3.scaleLinear()
+                            .domain([d3.max(arr, (d) => d.y), d3.min(arr, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for path
+                        var line = d3.line()
+                            .x((d) => sX(d.x))
+                            .y((d) => sY(d.y));
+
+                        // Set up and plot x and y axis with scaler
+                        let xAxis = d3.axisBottom(sX).tickFormat(d => d % 100);
+                        let yAxis = d3.axisLeft(sY);
+
+                        plot.append('g')
+                            .attr('transform', 'translate('+xLocation+', '+(yLocation+205)+')')
+                            .call(xAxis);
+
+                        plot.append('g')
+                            .attr('transform', 'translate('+(xLocation-5)+', '+yLocation+')')
+                            .call(yAxis);
+
+                        // Draws path based on array passed in at xLocation and yLocation for crime
+                        plot.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', line(arr))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'red')
+                            .attr('stroke-width', '1.5px')
+
+                        // Scalers based off migrationIn max and mins for x (mIsX) and y (mIsY)
+                        let mIsX = d3.scaleLinear()
+                            .domain([d3.max(migrationIn, (d) => d.x), d3.min(migrationIn, (d) => d.x)])
+                            .range([350, 0]);
+
+                        let mIsY = d3.scaleLinear()
+                            .domain([d3.max(migrationIn, (d) => d.y), d3.min(migrationIn, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for migrationIn path
+                        var mIline = d3.line()
+                            .x((d) => mIsX(d.x))
+                            .y((d) => mIsY(d.y));
+
+                        // Draws path based on migrationIn array to compare migration of incoming population
+                        plot.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', mIline(migrationIn))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'green')
+                            .attr('stroke-width', '1.5px')
+
+                        // Scalers based off migrationOut max and mins for x (mOsX) and y (mOsY)
+                        let mOsX = d3.scaleLinear()
+                            .domain([d3.max(migrationOut, (d) => d.x), d3.min(migrationOut, (d) => d.x)])
+                            .range([350, 0]);
+
+                        let mOsY = d3.scaleLinear()
+                            .domain([d3.max(migrationOut, (d) => d.y), d3.min(migrationOut, (d) => d.y)])
+                            .range([0, 200]);
+
+                        
+                        // Creates line for migrationOut path
+                        var mOline = d3.line()
+                            .x((d) => mOsX(d.x))
+                            .y((d) => mOsY(d.y));
+
+                        // Draws path based on migrationIn array to compare migration of outgoing population
+                        plot.append('path')
+                            .attr('transform', 'translate('+xLocation+', '+yLocation+')')
+                            .attr('d', mOline(migrationOut))
+                            .attr('fill', 'none')
+                            .attr('stroke', 'blue')
+                            .attr('stroke-width', '1.5px')
+
+                        // y-axis text
+                        plot.append('text')
+                            .attr('x', xLocation - 50)
+                            .attr('y', yLocation + 170)
+                            .attr('transform', 'rotate(-90, '+(xLocation-50)+', '+(yLocation+170)+')')
+                            .style('font-size', '15px')
+                            .text('Crime Rate per 100,000')
+
+                        // x-axis text
+                        plot.append('text')
+                            .attr('x', xLocation + 130)
+                            .attr('y', yLocation + 250)
+                            .style('font-size', '20px')
+                            .text('Year')
+                    
+                        // Title of graph text
+                        if(arr == propCrime){
+                            plot.append('text')
+                            .attr('x', xLocation + 100)
+                            .attr('y', yLocation - 15)
+                            .style('font-size', '20px')
+                            .text('Property Crime')
+
+                             // Legend Text
+                            plot.append('rect')
+                            .attr('x', xLocation + 265)
+                            .attr('y', yLocation + 275)
+                            .attr('width', 300)
+                            .attr('height', 75)
+                            .attr('fill', 'rgb(230, 230, 230)')
+                            .attr('stroke', 'red');
+                            
+                            plot.append('text')
+                            .attr('x', xLocation + 320)
+                            .attr('y', yLocation + 300)
+                            .style('font-size', '18px')
+                            .style('fill', 'red')
+                            .text('Red: ' + ' Crime Rate ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 320)
+                            .attr('y', yLocation + 320)
+                            .style('font-size', '18px')
+                            .style('fill', 'green')
+                            .text('Green: ' + ' Migration into state ')
+
+                            plot.append('text')
+                            .attr('x', xLocation + 320)
+                            .attr('y', yLocation + 340)
+                            .style('font-size', '18px')
+                            .style('fill', 'blue')
+                            .text('Blue: ' + ' Migration Out of state ')
+
+                        }else{
+                            plot.append('text')
+                            .attr('x', xLocation + 100)
+                            .attr('y', yLocation - 15)
+                            .style('font-size', '20px')
+                            .text('Violent Crime')
+                        }
+                    }else{
+                        // If there is only one year selected show data instead
+                        plot.append('rect')
+                            .attr('x', xLocation)
+                            .attr('y', yLocation)
+                            .attr('width', 300)
+                            .attr('height', 195)
+                            .attr('fill', 'rgb(230, 230, 230)')
+                            .attr('stroke', 'red');
+
+                        const textData = ['State: ' + selectedState, 'Year: ' + arr[0].x, 'Crime: ' + arr[0].y + '(Per 100,000)',
+                        'Migration in: ' + migrationIn[0].y, 'Migration out: ' + migrationOut[0].y];
+                        console.log(textData);
+
+                        // Plot the text, style it and space it
+                        const text = plot.append('text')
+                            .attr('x', 0) 
+                            .attr('y', yLocation + 20)
+                            .style('font-size', '20px')
+
+                        text.selectAll('tspan')
+                            .data(textData)
+                            .enter().append('tspan')
+                            .attr('x', xLocation + 10)
+                            .attr('dy', (d, i) => (i * 15))
+                            .text(d => d);
+
+                        // Title of stats
+                        if(arr == propCrime){
+                            plot.append('text')
+                            .attr('x', xLocation + 80)
+                            .attr('y', yLocation - 10)
+                            .style('font-size', '20px')
+                            .text('Property Crime')
+                        }else{
+                            plot.append('text')
+                            .attr('x', xLocation + 80)
+                            .attr('y', yLocation - 10)
+                            .style('font-size', '20px')
+                            .text('Violent Crime')
+                        }
+
+                    }
+                    
+                }
+                // Calls the function
+                drawGraph(propCrime, 100, 600);
+                drawGraph(vioCrime, 600, 600);
+                
+            }
+
+        </script>
+    </body>
 </html>
